@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Updating and upgrading system..."
+
 # Update and upgrade system
 echo "Updating system..."
 sudo apt update && sudo apt upgrade -y && apt autoremove -y
@@ -16,6 +18,7 @@ PROGRAMS=(
   "i2c-tools" # i2c tools package
   "rpi-connect-lite" # rasperry pi connect (anywhere) lite
   "ufw" # uncomplicated fire wall (use with ntrip)
+  "build-essential"
 )
 
 # Install programs with error handling
@@ -39,3 +42,57 @@ for PROGRAM in "${PROGRAMS[@]}"; do
 done
 
 echo "Installation complete!"
+
+echo "Checking if Node.js is installed..."
+if ! command -v node &> /dev/null; then
+    echo "Installing Node.js..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt install -y nodejs
+fi
+
+echo "Cloning RTK repository..."
+if [ -d "/home/pi/RTK" ]; then
+    echo "Repository already exists. Pulling latest changes..."
+    cd /home/pi/RTK && git pull
+else
+    git clone https://github.com/robertspark/RTK.git /home/pi/RTK
+    cd /home/pi/RTK
+fi
+
+echo "Installing Node.js dependencies..."
+npm install express socket.io serialport @serialport/parser-readline i2c-bus adxl345-sensor itg3205-sensor hmc5883l-sensor
+
+echo "Creating systemd service..."
+SERVICE_PATH="/etc/systemd/system/gnss-server.service"
+if [ ! -f "$SERVICE_PATH" ]; then
+    sudo bash -c 'cat > /etc/systemd/system/gnss-server.service' <<EOF
+[Unit]
+Description=GNSS Node.js Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/pi/RTK/server.js
+WorkingDirectory=/home/pi/RTK
+Restart=always
+User=pi
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=NODE_ENV=production
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=gnss-server
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    echo "Enabling and starting the GNSS server..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable gnss-server
+    sudo systemctl start gnss-server
+else
+    echo "GNSS server service already exists."
+fi
+
+echo "Cleaning up unnecessary packages..."
+sudo apt autoremove -y
+
+echo "Setup complete. Server is running at boot!"
