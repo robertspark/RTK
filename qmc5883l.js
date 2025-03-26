@@ -1,4 +1,4 @@
-//QMC5883L
+// QMC5883L Magnetometer Sensor
 
 const i2c = require('i2c-bus');
 
