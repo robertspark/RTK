@@ -1,4 +1,4 @@
-// ADXL345 Accelerometer 
+// ADXL345 Accelerometer Sensor
 
 const i2c = require('i2c-bus');
 
