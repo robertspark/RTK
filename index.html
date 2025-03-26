@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Raspberry Pi GNSS Interface</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        var socket = io();
+        socket.on('gnssStatus', function(status) {
+            document.getElementById('gnssStatus').innerText = status;
+            if (status.includes('Green')) {
+                document.getElementById('statusLed').style.backgroundColor = 'green';
+            } else if (status.includes('Blue')) {
+                document.getElementById('statusLed').style.backgroundColor = 'blue';
+            } else {
+                document.getElementById('statusLed').style.backgroundColor = 'red';
+            }
+        });
+
+        socket.on('sensorData', function(data) {
+            document.getElementById('accelData').innerText = JSON.stringify(data.accel);
+            document.getElementById('gyroData').innerText = JSON.stringify(data.gyro);
+            document.getElementById('magData').innerText = JSON.stringify(data.mag);
+        });
+
+        function logGPS() {
+            socket.emit('logGPS', 'Logging GPS Data');
+        }
+
+        function toggleCorrection() {
+            socket.emit('toggleCorrection');
+        }
+
+        function setMode(mode) {
+            socket.emit('setMode', mode);
+        }
+
+        function toggleRTK(rtkMode) {
+            socket.emit('toggleRTK', rtkMode);
+        }
+    </script>
+    <style>
+        #statusLed {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Raspberry Pi GNSS Interface</h1>
+    <p>GNSS Status: <span id="gnssStatus">No Fix</span> <span id="statusLed"></span></p>
+    <p>Accelerometer: <span id="accelData"></span></p>
+    <p>Gyroscope: <span id="gyroData"></span></p>
+    <p>Magnetometer: <span id="magData"></span></p>
+    <button onclick="logGPS()">Log GPS Data</button>
+    <button onclick="toggleCorrection()">Toggle Correction</button>
+    <button onclick="setMode('BASE STATION')">Set Base Station Mode</button>
+    <button onclick="setMode('ROVER SURVEY')">Set Rover Mode</button>
+    <button onclick="toggleRTK('RTK ROVER')">RTK Rover</button>
+    <button onclick="toggleRTK('RTK BASE STATION')">RTK Base Station</button>
+    <a href="settings.html"><button>Settings</button></a>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        var socket = io();
+        function sendCommand(command) {
+            socket.emit('setMode', command);
+        }
+    </script>
+</head>
+<body>
+    <h1>Settings</h1>
+    <button onclick="sendCommand('RESET')">Reset GNSS</button>
+    <button onclick="sendCommand('SAVE CONFIG')">Save Configuration</button>
+    <button onclick="sendCommand('LOAD CONFIG')">Load Configuration</button>
+    <button onclick="sendCommand('REBOOT')">Reboot GNSS</button>
+    <a href="index.html"><button>Back</button></a>
+</body>
+</html>
