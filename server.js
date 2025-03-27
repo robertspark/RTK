@@ -16,6 +16,13 @@ const server = http.createServer(app);
 const io = socketIo(server);
 const port = 3000;
 
+// GPS Data endpoint
+let gpsData = {
+    latitude: 0.0,
+    longitude: 0.0,
+    altitude: 0.0
+};
+
 // Automatically detect the Raspberry Pi's IP
 function getIPAddress() {
     const nets = networkInterfaces();
@@ -58,6 +65,23 @@ async function initSensors() {
     }
 }
 initSensors();
+
+gpsParser.on('data', (data) => {
+    // Here, you would parse the NMEA or RTCM data from the GPS
+    // Update latitude, longitude, and altitude based on the GPS data.
+    // For simplicity, assuming data is NMEA with the $GPGGA sentence:
+    const fields = data.split(',');
+    if (fields[0] === '$GPGGA') {
+        gpsData.latitude = parseFloat(fields[2]);  // Latitude
+        gpsData.longitude = parseFloat(fields[4]); // Longitude
+        gpsData.altitude = parseFloat(fields[9]);  // Altitude
+    }
+});
+
+// Endpoint to get GPS data
+app.get('/gps', (req, res) => {
+    res.json(gpsData);
+});
 
 // Handle GNSS data
 let gnssStatus = 'No Fix';
