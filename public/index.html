@@ -39,7 +39,7 @@
         }
     </script>
     <style>
-        #statusLed {
+        statusLed {
             width: 20px;
             height: 20px;
             border-radius: 50%;
@@ -49,6 +49,32 @@
 </head>
 <body>
     <h1>Raspberry Pi GNSS Interface</h1>
+     <div class="gnss-info">
+        <div><span>Latitude:</span> <span id="latitude">Loading...</span></div>
+        <div><span>Longitude:</span> <span id="longitude">Loading...</span></div>
+        <div><span>Altitude (AMSL):</span> <span id="altitude">Loading...</span></div>
+    </div>
+
+    <script>
+        // Function to update GNSS data on the page
+        function updateGNSSData() {
+            fetch('/gps')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('latitude').textContent = data.latitude || 'N/A';
+                    document.getElementById('longitude').textContent = data.longitude || 'N/A';
+                    document.getElementById('altitude').textContent = data.altitude || 'N/A';
+                })
+                .catch(error => {
+                    console.error('Error fetching GNSS data:', error);
+                });
+        }
+           // Update the GNSS data every 1 second
+        setInterval(updateGNSSData, 1000);
+
+        // Initial fetch of GNSS data
+        updateGNSSData();
+    </script>
     <p>GNSS Status: <span id="gnssStatus">No Fix</span> <span id="statusLed"></span></p>
     <p>Accelerometer: <span id="accelData"></span></p>
     <p>Gyroscope: <span id="gyroData"></span></p>
@@ -60,27 +86,5 @@
     <button onclick="toggleRTK('RTK ROVER\n')">RTK Rover</button>
     <button onclick="toggleRTK('RTK BASE STATION\n')">RTK Base Station</button>
     <a href="settings.html"><button>Settings</button></a>
-</body>
-</html>
-
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Settings</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-        var socket = io();
-        function sendCommand(command) {
-            socket.emit('setMode', command);
-        }
-    </script>
-</head>
-<body>
-    <h1>Settings</h1>
-    <button onclick="sendCommand('reset\n')">Reset GNSS</button>
-    <button onclick="sendCommand('SAVE CONFIG')">Save Configuration</button>
-    <button onclick="sendCommand('LOAD CONFIG')">Load Configuration</button>
-    <button onclick="sendCommand('freset\n')">Reboot GNSS</button>
-    <a href="index.html"><button>Back</button></a>
 </body>
 </html>
