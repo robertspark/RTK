@@ -55,10 +55,10 @@
     <p>Magnetometer: <span id="magData"></span></p>
     <button onclick="logGPS()">Log GPS Data</button>
     <button onclick="toggleCorrection()">Toggle Correction</button>
-    <button onclick="setMode('BASE STATION')">Set Base Station Mode</button>
-    <button onclick="setMode('ROVER SURVEY')">Set Rover Mode</button>
-    <button onclick="toggleRTK('RTK ROVER')">RTK Rover</button>
-    <button onclick="toggleRTK('RTK BASE STATION')">RTK Base Station</button>
+    <button onclick="setMode('BASE STATION\n')">Set Base Station Mode</button>
+    <button onclick="setMode('ROVER SURVEY\n')">Set Rover Mode</button>
+    <button onclick="toggleRTK('RTK ROVER\n')">RTK Rover</button>
+    <button onclick="toggleRTK('RTK BASE STATION\n')">RTK Base Station</button>
     <a href="settings.html"><button>Settings</button></a>
 </body>
 </html>
@@ -77,10 +77,10 @@
 </head>
 <body>
     <h1>Settings</h1>
-    <button onclick="sendCommand('RESET')">Reset GNSS</button>
+    <button onclick="sendCommand('reset\n')">Reset GNSS</button>
     <button onclick="sendCommand('SAVE CONFIG')">Save Configuration</button>
     <button onclick="sendCommand('LOAD CONFIG')">Load Configuration</button>
-    <button onclick="sendCommand('REBOOT')">Reboot GNSS</button>
+    <button onclick="sendCommand('freset\n')">Reboot GNSS</button>
     <a href="index.html"><button>Back</button></a>
 </body>
 </html>
