@@ -16,7 +16,7 @@ PROGRAMS=(
   "python3-serial" # Python3 serial library
   "python3-smbus" # Python3 smbus package for i2c
   "i2c-tools" # i2c tools package
-  "rpi-connect-lite" # rasperry pi connect (anywhere) lite
+  "rpi-connect" # rasperry pi connect (anywhere)
   "ufw" # uncomplicated fire wall (use with ntrip)
   "build-essential"
 )
@@ -53,14 +53,14 @@ fi
 echo "Cloning RTK repository..."
 if [ -d "/home/pi/RTK" ]; then
     echo "Repository already exists. Pulling latest changes..."
-    cd /home/pi/RTK && git pull
+    cd /home/rob/RTK && git pull
 else
-    git clone https://github.com/robertspark/RTK.git /home/pi/RTK
-    cd /home/pi/RTK
+    git clone https://github.com/robertspark/RTK.git /home/rob/RTK
+    cd /home/rob/RTK
 fi
 
 echo "Installing Node.js dependencies..."
-npm install express socket.io serialport @serialport/parser-readline i2c-bus adxl345-sensor itg3205-sensor hmc5883l-sensor
+npm install express socket.io serialport @serialport/parser-readline i2c-bus
 
 echo "Creating systemd service..."
 SERVICE_PATH="/etc/systemd/system/gnss-server.service"
@@ -71,10 +71,10 @@ Description=GNSS Node.js Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/node /home/pi/RTK/server.js
-WorkingDirectory=/home/pi/RTK
+ExecStart=/usr/bin/node /home/rob/RTK/server.js
+WorkingDirectory=/home/rob/RTK
 Restart=always
-User=pi
+User=rob
 Environment=PATH=/usr/bin:/usr/local/bin
 Environment=NODE_ENV=production
 StandardOutput=syslog
