@@ -51,7 +51,7 @@ if ! command -v node &> /dev/null; then
 fi
 
 echo "Cloning RTK repository..."
-if [ -d "/home/pi/RTK" ]; then
+if [ -d "/home/rob/RTK" ]; then
     echo "Repository already exists. Pulling latest changes..."
     cd /home/rob/RTK && git pull
 else
