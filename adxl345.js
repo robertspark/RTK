@@ -6,7 +6,7 @@ class ADXL345 {
     constructor(i2cBus = 1, address = 0x53) {
         this.i2cBus = i2cBus;
         this.address = address;
-        this.i2c = i2c.openSync(i2cBus);
+        this.init();
     }
 
     // Initialize the sensor
