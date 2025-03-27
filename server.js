@@ -12,9 +12,6 @@ const ADXL345 = require('./adxl345.js');
 const ITG3205 = require('./itg3205.js');
 const QMC5883L = require('./qmc5883l.js');
 
-const accel = new ADXL345(1, 0x53);
-accel.init();
-
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
