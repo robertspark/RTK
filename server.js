@@ -8,9 +8,9 @@ const fs = require('fs');
 const { networkInterfaces } = require('os');
 const i2c = require('i2c-bus');
 
-const ADXL345 = require('./adxl345.js');
-const ITG3205 = require('./itg3205.js');
-const QMC5883L = require('./qmc5883l.js');
+const ADXL345 = require('./s_adxl345.js');
+const ITG3205 = require('./s_itg3205.js');
+const QMC5883L = require('./s_qmc5883l.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -72,7 +72,7 @@ gpsParser.on('data', (data) => {
 });
 
 //setInterval(() => {
-//    const data = accel.readAcceleration();
+//    const data = accelerometer.readAcceleration();
 //    console.log(`X: ${data.x.toFixed(3)}g, Y: ${data.y.toFixed(3)}g, Z: ${data.z.toFixed(3)}g`);
 //}, 500);
 
