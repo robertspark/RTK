@@ -11,10 +11,12 @@ class QMC5883L {
 
     // Initialize the QMC5883L sensor
     init() {
-        // Set control registers for continuous measurement mode
-        this.i2cBus.writeByteSync(this.address, 0x0B, 0x01); // Control Register 2: Soft reset
-        this.i2cBus.writeByteSync(this.address, 0x09, 0x1D); // Control Register 1: 200Hz, Full Scale, Continuous Mode
-        this.i2cBus.writeByteSync(this.address, 0x0A, 0x00); // Set Reset Period Register
+        // Soft reset
+        this.i2cBus.writeByteSync(this.address, 0x0B, 0x01);
+        // Set control register 1: 200Hz output rate, full-scale ±8 Gauss, continuous mode
+        this.i2cBus.writeByteSync(this.address, 0x09, 0x1D);
+        // Set reset period register (recommended value)
+        this.i2cBus.writeByteSync(this.address, 0x0A, 0x01);
     }
 
     // Read raw magnetometer values
@@ -29,4 +31,21 @@ class QMC5883L {
         };
     }
 
-    // Convert raw values to microteslas (adjust
+    // Convert raw values to microteslas (scale factor ~12000 LSB/Gauss)
+    readMicroTesla() {
+        const raw = this.readRawData();
+        const scale = 1.0 / 12000; // Approximate conversion factor
+
+        return {
+            x: raw.x * scale,
+            y: raw.y * scale,
+            z: raw.z * scale
+        };
+    }
+
+    close() {
+        this.i2cBus.closeSync();
+    }
+}
+
+module.exports = QMC5883L;
