@@ -6,10 +6,9 @@ const SerialPort = require('serialport');
 const Readline = require('@serialport/parser-readline');
 const fs = require('fs');
 const { networkInterfaces } = require('os');
-const i2c = require('i2c-bus');
-const ADXL345 = require('adxl345-sensor');
-const ITG3205 = require('itg3205-sensor');
-const QMC5883L = require('qmc5883l-sensor');
+const ADXL345 = require('./s_adxl345');
+const ITG3205 = require('./s_itg3205');
+const QMC5883L = require('./s_qmc5883l');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,11 +38,17 @@ app.use(express.static(__dirname + '/public'));
 const gpsPort = new SerialPort('/dev/serial0', { baudRate: 115200 });
 const gpsParser = gpsPort.pipe(new Readline({ delimiter: '\n' }));
 
-// I2C setup for sensors
-const i2cBus = i2c.openSync(1);
-const accelerometer = new ADXL345({ i2cBus });
-const gyroscope = new ITG3205({ i2cBus });
-const magnetometer = new QMC5883L({ i2cBus });
+// Initialize sensors
+const accelerometer = new ADXL345();
+const gyroscope = new ITG3205();
+const magnetometer = new QMC5883L();
+
+async function initializeSensors() {
+    await accelerometer.init();
+    await gyroscope.init();
+    await magnetometer.init();
+}
+initializeSensors();
 
 // Handle GNSS data
 let gnssStatus = 'No Fix';
@@ -71,9 +76,9 @@ gpsParser.on('data', (data) => {
 // Read sensor data and emit to client
 async function readSensors() {
     try {
-        const accel = await accelerometer.getAcceleration().catch(err => ({ error: err.message }));
-        const gyro = await gyroscope.getRotation().catch(err => ({ error: err.message }));
-        const mag = await magnetometer.getHeading().catch(err => ({ error: err.message }));
+        const accel = accelerometer.readAcceleration();
+        const gyro = await gyroscope.readGyroDPS();
+        const mag = await magnetometer.readMicroTesla();
 
         io.emit('sensorData', { accel, gyro, mag });
     } catch (error) {
