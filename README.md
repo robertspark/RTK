@@ -12,3 +12,4 @@ RTCM1107 1
 RTCM1127 1
 RTCM1230 1
 
+GNU General Public License v3.0
