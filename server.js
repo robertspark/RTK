@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const os = require('os');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const fs = require('fs');
@@ -41,14 +40,18 @@ const gpsParser = gpsPort.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 
 // Initialize sensors
 const accelerometer = new ADXL345();  // No async init needed
-const gyroscope = new ITG3205();      // Requires async init
-const magnetometer = new QMC5883L();  // Requires async init
+let gyroscope;  // Will be assigned in async init
+let magnetometer;  // Will be assigned in async init
 
 // Initialize sensors asynchronously
 async function initSensors() {
     try {
+        gyroscope = new ITG3205();
         await gyroscope.init();
+
+        magnetometer = new QMC5883L();
         await magnetometer.init();
+
         console.log("Sensors initialized successfully.");
     } catch (error) {
         console.error("Error initializing sensors:", error);
@@ -83,8 +86,8 @@ gpsParser.on('data', (data) => {
 async function readSensors() {
     try {
         const accel = accelerometer.readAcceleration();
-        const gyro = await gyroscope.readGyroDPS();
-        const mag = await magnetometer.readMicroTesla();
+        const gyro = gyroscope ? await gyroscope.readGyroDPS() : { x: 0, y: 0, z: 0 };
+        const mag = magnetometer ? await magnetometer.readMicroTesla() : { x: 0, y: 0, z: 0 };
 
         io.emit('sensorData', { accel, gyro, mag });
     } catch (error) {
