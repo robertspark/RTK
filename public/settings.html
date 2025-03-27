@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        var socket = io();
+        function sendCommand(command) {
+            socket.emit('setMode', command);
+        }
+    </script>
+</head>
+<body>
+    <h1>Settings</h1>
+    <button onclick="sendCommand('reset\n')">Reset GNSS</button>
+    <button onclick="sendCommand('SAVE CONFIG')">Save Configuration</button>
+    <button onclick="sendCommand('LOAD CONFIG')">Load Configuration</button>
+    <button onclick="sendCommand('freset\n')">Reboot GNSS</button>
+    <a href="index.html"><button>Back</button></a>
+</body>
+</html>
