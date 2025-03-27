@@ -7,15 +7,21 @@ const Readline = require('@serialport/parser-readline');
 const fs = require('fs');
 const { networkInterfaces } = require('os');
 const i2c = require('i2c-bus');
-const ADXL345 = require('adxl345-sensor');
-const ITG3205 = require('itg3205-sensor');
-const HMC5883L = require('hmc5883l-sensor');
+
+const ADXL345 = require('./adxl345.js');
+const ITG3205 = require('./itg3205.js');
+const QMC5883L = require('./qmc5883l.js');
+
+const accel = new ADXL345(1, 0x53);
+accel.init();
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
 const port = 3000;
+
+const Sbaud = 115200;
 
 // Automatically detect the Raspberry Pi's IP
 function getIPAddress() {
@@ -36,14 +42,14 @@ const ipAddress = getIPAddress();
 app.use(express.static(__dirname + '/public'));
 
 // Serial port setup for UM980 GNSS receiver
-const gpsPort = new SerialPort('/dev/serial0', { baudRate: 115200 });
+const gpsPort = new SerialPort('/dev/serial0', { baudRate: Sbaud });
 const gpsParser = gpsPort.pipe(new Readline({ delimiter: '\n' }));
 
 // I2C setup for sensors
 const i2cBus = i2c.openSync(1);
 const accelerometer = new ADXL345({ i2cBus });
 const gyroscope = new ITG3205({ i2cBus });
-const magnetometer = new HMC5883L({ i2cBus });
+const magnetometer = new QMC5883L({ i2cBus });
 
 // Handle GNSS data
 let gnssStatus = 'No Fix';
@@ -67,6 +73,28 @@ gpsParser.on('data', (data) => {
         io.emit('gnssStatus', gnssStatus);
     }
 });
+
+//setInterval(() => {
+//    const data = accel.readAcceleration();
+//    console.log(`X: ${data.x.toFixed(3)}g, Y: ${data.y.toFixed(3)}g, Z: ${data.z.toFixed(3)}g`);
+//}, 500);
+
+//setInterval(() => {
+//    const data = magnetometer.readGauss();
+//    console.log(`Magnetic Field: X=${data.x.toFixed(2)} Y=${data.y.toFixed(2)} Z=${data.z.toFixed(2)} (Gauss)`);
+//}, 1000);
+
+//setInterval(() => {
+//    console.log("Gyro (°/s):", gyroscope.readGyroDPS());
+//    console.log("Temp (°C):", gyroscope.readTemperature().toFixed(2));
+//}, 1000);
+
+// Close the I2C connection when done
+//process.on('SIGINT', () => {
+//    magnetometer.close();
+//    console.log('HMC5883L sensor connection closed.');
+//    process.exit();
+//});
 
 // Read sensor data and emit to client
 async function readSensors() {
