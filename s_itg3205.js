@@ -1,86 +1,83 @@
-// ITG3205 Gyroscope Sensor
-
 const i2c = require('i2c-bus');
 
+cconst i2c = require('i2c-bus');
+
 class ITG3205 {
-    constructor(i2cBusNumber = 1, address = 0x68) {
-        this.i2cBusNumber = i2cBusNumber;
+    constructor(busNumber = 1, address = 0x68) {
+        this.busNumber = busNumber;
         this.address = address;
-        this.i2cBus = null;
+        this.i2cBus = i2c.openSync(this.busNumber);
     }
 
-    async init() {
+    init() {
         try {
-            this.i2cBus = await i2c.openPromisified(this.i2cBusNumber);
+            console.log("Initializing ITG3205...");
 
-            // Power Management Register - Wake up the sensor
-            await this.i2cBus.writeByte(this.address, 0x3E, 0x00);
+            // Reset device (0x3E = reset register, 0x80 = reset command)
+            this.i2cBus.writeByteSync(this.address, 0x3E, 0x80);
+            this._wait(100);  // Wait for the sensor to reset
 
-            // Set DLPF (Digital Low Pass Filter) and sample rate divider
-            await this.i2cBus.writeByte(this.address, 0x15, 0x07); // Sample Rate Divider
-            await this.i2cBus.writeByte(this.address, 0x16, 0x1A); // DLPF 1 (42Hz) & Full Scale ±2000°/s
+            // Wake up the sensor (0x3E = reset register, 0x00 = wake up command)
+            this.i2cBus.writeByteSync(this.address, 0x3E, 0x00);
+            this._wait(100);  // Allow sensor to stabilize
 
-            console.log("ITG3205 initialized successfully.");
+            // Set full-scale range to ±2000°/s (0x16 = scale register, 0x18 = ±2000dps)
+            this.i2cBus.writeByteSync(this.address, 0x16, 0x18);
+
+            // Set sample rate to 1kHz (0x15 = sample rate register, 0x07 = rate)
+            this.i2cBus.writeByteSync(this.address, 0x15, 0x07);
+
+            console.log("✅ ITG3205 initialized successfully.");
         } catch (error) {
-            console.error("Error initializing ITG3205:", error);
+            console.error("⚠️ ITG3205 Init Error:", error);
         }
     }
 
-    async readRawGyroData() {
+    startReading() {
+        // Set up a 10Hz reading rate (100ms interval)
+        this.readInterval = setInterval(() => {
+            const data = this.readGyroDPS();
+            console.log("Gyroscope Data: ", data);
+        }, 100); // 100ms = 10Hz
+    }
+
+    stopReading() {
+        // Stop the reading loop
+        if (this.readInterval) {
+            clearInterval(this.readInterval);
+            console.log("Stopped reading ITG3205 data.");
+        }
+    }
+
+    readGyroDPS() {
         try {
             const buffer = Buffer.alloc(6);
-            await this.i2cBus.readI2cBlock(this.address, 0x1D, 6, buffer);
+            this.i2cBus.readI2cBlockSync(this.address, 0x1D, 6, buffer);  // 0x1D is the data register
 
+            const rawX = buffer.readInt16BE(0);
+            const rawY = buffer.readInt16BE(2);
+            const rawZ = buffer.readInt16BE(4);
+
+            // Convert raw values to degrees per second (dps)
+            const scaleFactor = 14.375;  // For ±2000dps
             return {
-                x: buffer.readInt16BE(0),
-                y: buffer.readInt16BE(2),
-                z: buffer.readInt16BE(4)
+                x: rawX / scaleFactor,
+                y: rawY / scaleFactor,
+                z: rawZ / scaleFactor
             };
         } catch (error) {
-            console.error("Error reading gyro data:", error);
-            return { x: 0, y: 0, z: 0 };
+            console.error("⚠️ ITG3205 Read Error:", error);
+            return { x: null, y: null, z: null };
         }
     }
 
-    async readGyroDPS() {
-        try {
-            const rawData = await this.readRawGyroData();
-            const sensitivity = 14.375; // ITG3205 has 14.375 LSB per °/s
-
-            return {
-                x: rawData.x / sensitivity,
-                y: rawData.y / sensitivity,
-                z: rawData.z / sensitivity
-            };
-        } catch (error) {
-            console.error("Error converting gyro data to DPS:", error);
-            return { x: 0, y: 0, z: 0 };
-        }
-    }
-
-    async readTemperature() {
-        try {
-            const buffer = Buffer.alloc(2);
-            await this.i2cBus.readI2cBlock(this.address, 0x1B, 2, buffer);
-            const tempRaw = buffer.readInt16BE(0);
-
-            // Convert to degrees Celsius (as per ITG3205 datasheet)
-            return (tempRaw + 13200) / 280;
-        } catch (error) {
-            console.error("Error reading temperature:", error);
-            return null;
-        }
-    }
-
-    async close() {
-        try {
-            if (this.i2cBus) {
-                await this.i2cBus.close();
-                this.i2cBus = null;
-                console.log("I2C connection closed.");
-            }
-        } catch (error) {
-            console.error("Error closing I2C connection:", error);
+    // Helper method to introduce a delay for stabilization
+    _wait(ms) {
+        const start = Date.now();
+        while (Date.now() - start < ms) {
+            // Blocking wait for 'ms' milliseconds
         }
     }
 }
+
+module.exports = ITG3205;

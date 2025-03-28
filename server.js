@@ -5,25 +5,31 @@ const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const fs = require('fs');
 const { networkInterfaces } = require('os');
+const Madgwick = require('./madgwick');
 
-// Import custom sensor modules
 const ADXL345 = require('./s_adxl345');
 const ITG3205 = require('./s_itg3205');
 const QMC5883L = require('./s_qmc5883l');
+const UM980 = require('./s_um980');  // Ensure the path is correct
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const port = 3000;
 
-// GPS Data endpoint
+const serialPort = '/dev/Serial0';  // Serial port for UM980
+const baudRate = 115200;   // Baud rate for UM980
+
 let gpsData = {
-    latitude: 0.0,
-    longitude: 0.0,
-    altitude: 0.0
+    time: "--",
+    latitude: "--",
+    longitude: "--",
+    altitude: "--",
+    satellites: "--",
+    status: "No Fix" // Default GNSS status
 };
 
-// Automatically detect the Raspberry Pi's IP
+// Initialize WebSocket server for real-time communication
 function getIPAddress() {
     const nets = networkInterfaces();
     for (const name of Object.keys(nets)) {
@@ -37,114 +43,130 @@ function getIPAddress() {
 }
 
 const ipAddress = getIPAddress();
-
-// Serve static files (index.html, CSS, client-side JavaScript)
 app.use(express.static(__dirname + '/public'));
 
-// Serial port setup for UM980 GNSS receiver
-const gpsPort = new SerialPort({ path: '/dev/serial0', baudRate: 115200 });
-const gpsParser = gpsPort.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+// Initialize the UM980 GNSS Receiver
+const gnssReceiver = new UM980(serialPort, baudRate);
 
-// Initialize sensors
-const accelerometer = new ADXL345();  // No async init needed
-let gyroscope;  // Will be assigned in async init
-let magnetometer;  // Will be assigned in async init
+// Listen for GNSS data from UM980
+gnssReceiver.on('gnss', (data) => {
+    console.log('GNSS Data:', data);
+    gpsData = {
+        time: data.time || "--",
+        latitude: data.latitude || "--",
+        longitude: data.longitude || "--",
+        altitude: data.altitude || "--",
+        satellites: data.satellites || "--",
+        status: data.status || "No Fix"
+    };
+    // Emit GNSS data to front-end via WebSocket
+    io.emit('gpsData', gpsData);
+});
 
-// Initialize sensors asynchronously
-async function initSensors() {
+// Switch UM980 to Base Station Mode
+function setBaseStationMode() {
+    gnssReceiver.setBaseStationMode();  // Sends "MODE BASE" to UM980
+}
+
+// Switch UM980 to Rover Mode
+function setRoverMode() {
+    gnssReceiver.setRoverMode();  // Sends "MODE ROVER SURVEY" to UM980
+}
+
+// Initialize IMU Sensors
+let accelerometer, gyroscope, magnetometer;
+const madgwick = new Madgwick(0.1, 100);
+
+async function initSensors(retryCount = 3) {
     try {
+        accelerometer = new ADXL345();
+        await accelerometer.init();
+        
         gyroscope = new ITG3205();
         await gyroscope.init();
-
+        
         magnetometer = new QMC5883L();
         await magnetometer.init();
-
-        console.log("Sensors initialized successfully.");
+        
+        console.log("✅ Sensors initialized successfully.");
     } catch (error) {
-        console.error("Error initializing sensors:", error);
+        console.error("⚠️ Error initializing sensors:", error);
+        if (retryCount > 0) {
+            console.log(`Retrying sensor initialization (${retryCount} attempts left)...`);
+            setTimeout(() => initSensors(retryCount - 1), 2000);
+        }
     }
 }
 initSensors();
 
+// Parse GPS Data (GPGGA / GNGGA strings)
+const gpsParser = new ReadlineParser({ delimiter: '\r\n' });
+const gpsSerialPort = new SerialPort({ path: serialPort, baudRate });
+gpsSerialPort.pipe(gpsParser);
+
 gpsParser.on('data', (data) => {
-    // Here, you would parse the NMEA or RTCM data from the GPS
-    // Update latitude, longitude, and altitude based on the GPS data.
-    // For simplicity, assuming data is NMEA with the $GPGGA sentence:
-    const fields = data.split(',');
-    if (fields[0] === '$GPGGA') {
-        gpsData.latitude = parseFloat(fields[2]);  // Latitude
-        gpsData.longitude = parseFloat(fields[4]); // Longitude
-        gpsData.altitude = parseFloat(fields[9]);  // Altitude
+    if (!data.startsWith('$GNGGA') && !data.startsWith('$GPGGA')) return;
+
+    const parts = data.split(',');
+    if (parts.length < 10) return;
+
+    let rawLat = parseFloat(parts[2]);
+    let rawLon = parseFloat(parts[4]);
+    let satellites = parseInt(parts[7], 10);
+
+    if (!isNaN(rawLat) && !isNaN(rawLon)) {
+        const latHemisphere = parts[3] === 'S' ? -1 : 1;
+        const lonHemisphere = parts[5] === 'W' ? -1 : 1;
+
+        gpsData = {
+            time: parts[1] || "--",
+            latitude: (rawLat / 100) * latHemisphere,
+            longitude: (rawLon / 100) * lonHemisphere,
+            altitude: parseFloat(parts[9]) || "--",
+            satellites: satellites || "--",
+            status: satellites > 6 ? "RTK Fix" : satellites > 4 ? "RTK Float" : "No Fix"
+        };
+
+        // Emit GNSS data to front-end via WebSocket
+        io.emit('gpsData', gpsData);
     }
 });
 
-// Endpoint to get GPS data
+// Serve GPS Data via REST
 app.get('/gps', (req, res) => {
     res.json(gpsData);
 });
 
-// Handle GNSS data
-let gnssStatus = 'No Fix';
-gpsParser.on('data', (data) => {
-    if (data.startsWith('$GNGGA')) {
-        const fields = data.split(',');
-        const fixStatus = fields[6];
-        switch (fixStatus) {
-            case '1':
-                gnssStatus = 'No RTK (Red)';
-                break;
-            case '2':
-                gnssStatus = 'RTK Float (Blue)';
-                break;
-            case '4':
-                gnssStatus = 'RTK Fix (Green)';
-                break;
-            default:
-                gnssStatus = 'No Fix (Red)';
-        }
-        io.emit('gnssStatus', gnssStatus);
-    }
-});
-
-// Read sensor data and emit to client
+// Read IMU Sensors (accelerometer, gyroscope, magnetometer)
 async function readSensors() {
     try {
-        const accel = accelerometer.readAcceleration();
-        const gyro = gyroscope ? await gyroscope.readGyroDPS() : { x: 0, y: 0, z: 0 };
-        const mag = magnetometer ? await magnetometer.readMicroTesla() : { x: 0, y: 0, z: 0 };
+        if (!accelerometer || !gyroscope || !magnetometer) return;
 
-        io.emit('sensorData', { accel, gyro, mag });
+        const accel = await accelerometer.readAcceleration();
+        const gyro = await gyroscope.readGyroDPS();
+        const mag = await magnetometer.readMicroTesla();
+
+        // Update Madgwick filter with IMU data
+        madgwick.update(gyro.x, gyro.y, gyro.z, accel.x, accel.y, accel.z, mag.x, mag.y, mag.z);
+        const fusedOrientation = madgwick.getQuaternion();
+
+        // Emit sensor data to front-end via WebSocket
+        io.emit('sensorData', { gpsData, accel, gyro, mag, fusedOrientation });
     } catch (error) {
-        console.error('Error reading sensors:', error);
+        console.error('⚠️ Error reading sensors:', error);
     }
 }
-setInterval(readSensors, 1000);
 
-// Handle client connections
+// Periodic Sensor Read (every 500ms)
+setInterval(readSensors, 500); 
+
+// WebSocket Communication for Client-Side
 io.on('connection', (socket) => {
-    console.log('Client connected');
-    socket.emit('gnssStatus', gnssStatus);
-
-    socket.on('logGPS', (gpsData) => {
-        fs.appendFile('log.csv', `${gpsData}\n`, (err) => {
-            if (err) console.error('Error logging data:', err);
-        });
-    });
-
-    socket.on('toggleCorrection', () => {
-        console.log('Toggle GPS Correction');
-    });
-
-    socket.on('setMode', (mode) => {
-        gpsPort.write(`MODE ${mode}\n`);
-        console.log(`Set GNSS Mode: ${mode}`);
-    });
-
-    socket.on('toggleRTK', (rtkMode) => {
-        console.log(`RTK Mode: ${rtkMode}`);
-    });
+    console.log('✅ Client connected');
+    socket.on('disconnect', () => console.log('⚠️ Client disconnected'));
 });
 
+// Start Server
 server.listen(port, () => {
-    console.log(`Server running at http://${ipAddress}:${port}/`);
+    console.log(`🚀 Server running at http://${ipAddress}:${port}/`);
 });

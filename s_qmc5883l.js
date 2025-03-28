@@ -1,72 +1,82 @@
-// QMC5883L Magnetometer Sensor
-
 const i2c = require('i2c-bus');
 
-class QMC5883L {
-    constructor(i2cBusNumber = 1, address = 0x0D) {
-        this.i2cBusNumber = i2cBusNumber;
+class Magnetometer {
+    constructor(busNumber = 1, address = 0x0D) {
+        this.busNumber = busNumber;
         this.address = address;
-        this.i2cBus = null;
+        this.i2cBus = i2c.openSync(this.busNumber);
     }
 
-    // Initialize the I2C connection and configure the sensor
-    async init() {
+    init() {
         try {
-            this.i2cBus = await i2c.openPromisified(this.i2cBusNumber);
-            
-            // Soft reset
-            await this.i2cBus.writeByte(this.address, 0x0B, 0x01);
-            // Set control register 1: 200Hz, full-scale ±8 Gauss, continuous mode
-            await this.i2cBus.writeByte(this.address, 0x09, 0x1D);
-            // Set reset period register (recommended value)
-            await this.i2cBus.writeByte(this.address, 0x0A, 0x01);
-            
-            console.log('QMC5883L initialized successfully.');
+            console.log("Initializing Magnetometer...");
+
+            // Soft reset the sensor to ensure it's in a clean state
+            this.i2cBus.writeByteSync(this.address, 0x0F, 0x80);
+            this._wait(100);  // Wait for reset to complete
+
+            // Configure the magnetometer (e.g., measurement mode, output rate)
+            // Setting the mode to continuous measurement (0x00 for continuous mode)
+            this.i2cBus.writeByteSync(this.address, 0x09, 0x00); // Continuous measurement
+            this.i2cBus.writeByteSync(this.address, 0x08, 0x00); // Default mode (high-speed, no filtering)
+
+            // Set output data rate to 10Hz (address 0x08, value 0x00 = 10Hz)
+            this.i2cBus.writeByteSync(this.address, 0x08, 0x00);
+
+            console.log("✅ Magnetometer initialized successfully.");
         } catch (error) {
-            console.error('Error initializing QMC5883L:', error);
+            console.error("⚠️ Magnetometer Init Error:", error);
         }
     }
 
-    // Read raw magnetometer values
-    async readRawData() {
-        try {
-            const buffer = Buffer.alloc(6);
-            await this.i2cBus.readI2CBlock(this.address, 0x00, 6, buffer);
+    startReading() {
+        // Set up a 10Hz reading rate (100ms interval)
+        this.readInterval = setInterval(() => {
+            const data = this.readMagData();
+            console.log("Magnetometer Data: ", data);
+        }, 100); // 100ms = 10Hz
+    }
 
+    stopReading() {
+        // Stop the reading loop
+        if (this.readInterval) {
+            clearInterval(this.readInterval);
+            console.log("Stopped reading Magnetometer data.");
+        }
+    }
+
+    readMagData() {
+        try {
+            // Read 6 bytes of magnetometer data (X, Y, Z axes)
+            const buffer = Buffer.alloc(6);
+            this.i2cBus.readI2cBlockSync(this.address, 0x00, 6, buffer);  // 0x00 is the data register
+
+            // Read raw X, Y, Z data (12-bit values)
+            const rawX = buffer.readInt16BE(0);
+            const rawY = buffer.readInt16BE(2);
+            const rawZ = buffer.readInt16BE(4);
+
+            // Convert the raw values to the desired unit (usually in microtesla, uT)
+            // Example scale factor for QMC5883L: 1 LSB = 0.92 microtesla (µT)
+            const scaleFactor = 0.92;  // This is just an example and may vary for your sensor
             return {
-                x: buffer.readInt16LE(0),
-                y: buffer.readInt16LE(2),
-                z: buffer.readInt16LE(4)
+                x: rawX * scaleFactor,
+                y: rawY * scaleFactor,
+                z: rawZ * scaleFactor
             };
         } catch (error) {
-            console.error('Error reading QMC5883L data:', error);
-            return { x: 0, y: 0, z: 0 };
+            console.error("⚠️ Magnetometer Read Error:", error);
+            return { x: null, y: null, z: null };
         }
     }
 
-    // Convert raw values to microteslas
-    async readMicroTesla() {
-        const raw = await this.readRawData();
-        const scale = 1.0 / 12000; // Approximate conversion factor
-
-        return {
-            x: raw.x * scale,
-            y: raw.y * scale,
-            z: raw.z * scale
-        };
-    }
-
-    // Close the I2C connection
-    async close() {
-        if (this.i2cBus) {
-            try {
-                await this.i2cBus.close();
-                console.log('QMC5883L sensor connection closed.');
-            } catch (error) {
-                console.error('Error closing QMC5883L connection:', error);
-            }
+    // Helper method to introduce a delay for stabilization
+    _wait(ms) {
+        const start = Date.now();
+        while (Date.now() - start < ms) {
+            // Blocking wait for 'ms' milliseconds
         }
     }
 }
 
-module.exports = QMC5883L;
+module.exports = Magnetometer;

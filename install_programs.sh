@@ -16,7 +16,7 @@ PROGRAMS=(
   "python3-serial" # Python3 serial library
   "python3-smbus" # Python3 smbus package for i2c
   "i2c-tools" # i2c tools package
-  "rpi-connect" # rasperry pi connect (anywhere)
+  "rpi-connect" # rasperry pi connect (anywhere) lite
   "ufw" # uncomplicated fire wall (use with ntrip)
   "build-essential"
 )
@@ -51,11 +51,11 @@ if ! command -v node &> /dev/null; then
 fi
 
 echo "Cloning RTK repository..."
-if [ -d "/home/rob/RTK" ]; then
+if [ -d "/home/pi/RTK" ]; then
     echo "Repository already exists. Pulling latest changes..."
     cd /home/rob/RTK && git pull
 else
-    git clone https://github.com/robertspark/RTK.git /home/rob/RTK
+    git clone https://github.com/robertspark/RTK.git /home/pi/RTK
     cd /home/rob/RTK
 fi
 
